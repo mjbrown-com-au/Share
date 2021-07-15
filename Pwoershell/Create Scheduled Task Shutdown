@@ -1,0 +1,48 @@
+#Create scheduled task to shutdown PC's
+#Add 1 computer per line to a txt file C:\Temp\Computers.txt
+#Will check if the Computer is on must have DNS
+#Checks if the Task named: Daily Shutdown already exists
+#Checks the OS is Windows 10
+#Michael Brown 15-07-2021
+#No Warranty please test :)
+
+$Computers = Get-Content "C:\Temp\Computers.txt"
+$Timeout = 1000
+$Ping = New-Object System.Net.NetworkInformation.Ping
+
+foreach ($Computer in $Computers){
+
+    If ($ping.Send($Computer,$Timeout).Status -eq "success"){
+        Write-Host "Attempting to create task on $Computer" -ForegroundColor Yellow
+        Invoke-Command -ComputerName $Computer -ScriptBlock{
+
+            If(!(Get-ScheduledTask | ?{$_.TaskName -eq "Daily Shutdown"})){
+
+                If ((Get-WmiObject -class Win32_OperatingSystem).Caption -like "*Windows 10*"){
+
+                    $taskname = "Daily Shutdown"
+                    $description = "Shut down clients to allow server backups to complete"
+                    $Action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument 'Stop-Computer -Force' 
+                    $Trigger = New-ScheduledTaskTrigger -Daily -At 6:50PM
+                    $Setting = New-ScheduledTaskSettingsSet -Compatibility Win8
+                    Register-ScheduledTask -Settings $Setting -Action $action -Trigger $trigger -TaskName $taskname -Description $description -User "NT AUTHORITY\SYSTEM"
+
+                    Get-ScheduledTask -TaskName "Daily Shutdown" | select Taskname,State
+                }#OnlyW10
+                else
+                {
+                Write-Host "$($using:Computer) is not running Windows 10"
+                }
+            }
+            Else
+            {
+            Write-Host "Scheduled Task already exists on $($using:Computer)" -ForegroundColor Red
+            }#Taskexists
+        }#Invokecmd
+    }#IfLive
+    Else
+    {
+    Write-Host "No Task Created on $($using:Computer)"
+    }
+}#Foreach
+
